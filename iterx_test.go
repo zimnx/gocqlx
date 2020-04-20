@@ -54,11 +54,11 @@ func TestStruct(t *testing.T) {
 	session := CreateSession(t)
 	defer session.Close()
 
-	if err := ExecStmt(session, `CREATE TYPE gocqlx_test.FullName (first_Name text, last_name text)`); err != nil {
+	if err := session.ExecStmt(`CREATE TYPE gocqlx_test.FullName (first_Name text, last_name text)`); err != nil {
 		t.Fatal("create type:", err)
 	}
 
-	if err := ExecStmt(session, `CREATE TABLE gocqlx_test.struct_table (
+	if err := session.ExecStmt(`CREATE TABLE gocqlx_test.struct_table (
 			testuuid       timeuuid PRIMARY KEY,
 			testtimestamp  timestamp,
 			testvarchar    varchar,
@@ -125,7 +125,9 @@ func TestStruct(t *testing.T) {
 		Testudt:       FullNameUDT{FirstName: "John", LastName: "Doe"},
 	}
 
-	if err := session.Query(`INSERT INTO struct_table (testuuid, testtimestamp, testvarchar, testbigint, testblob, testbool, testfloat,testdouble, testint, testdecimal, testlist, testset, testmap, testvarint, testinet, testcustom, testudt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	const stmt = `INSERT INTO struct_table (testuuid, testtimestamp, testvarchar, testbigint, testblob, testbool, testfloat,testdouble, testint, testdecimal, testlist, testset, testmap, testvarint, testinet, testcustom, testudt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	if err := session.Query(stmt, nil).Bind(
 		m.Testuuid,
 		m.Testtimestamp,
 		m.Testvarchar,
@@ -142,13 +144,13 @@ func TestStruct(t *testing.T) {
 		m.Testvarint,
 		m.Testinet,
 		m.Testcustom,
-		m.Testudt).Exec(); err != nil {
+		m.Testudt).ExecRelease(); err != nil {
 		t.Fatal("insert:", err)
 	}
 
 	t.Run("get", func(t *testing.T) {
 		var v StructTable
-		if err := gocqlx.Query(session.Query(`SELECT * FROM struct_table`), nil).Get(&v); err != nil {
+		if err := session.Query(`SELECT * FROM struct_table`, nil).Get(&v); err != nil {
 			t.Fatal("get failed", err)
 		}
 
@@ -159,7 +161,7 @@ func TestStruct(t *testing.T) {
 
 	t.Run("select", func(t *testing.T) {
 		var v []StructTable
-		if err := gocqlx.Query(session.Query(`SELECT * FROM struct_table`), nil).Select(&v); err != nil {
+		if err := session.Query(`SELECT * FROM struct_table`, nil).Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -174,7 +176,7 @@ func TestStruct(t *testing.T) {
 
 	t.Run("select ptr", func(t *testing.T) {
 		var v []*StructTable
-		if err := gocqlx.Query(session.Query(`SELECT * FROM struct_table`), nil).Select(&v); err != nil {
+		if err := session.Query(`SELECT * FROM struct_table`, nil).Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -191,18 +193,18 @@ func TestStruct(t *testing.T) {
 func TestScannable(t *testing.T) {
 	session := CreateSession(t)
 	defer session.Close()
-	if err := ExecStmt(session, `CREATE TABLE gocqlx_test.scannable_table (testfullname text PRIMARY KEY)`); err != nil {
+	if err := session.ExecStmt(`CREATE TABLE gocqlx_test.scannable_table (testfullname text PRIMARY KEY)`); err != nil {
 		t.Fatal("create table:", err)
 	}
 	m := FullName{"John", "Doe"}
 
-	if err := session.Query(`INSERT INTO scannable_table (testfullname) values (?)`, m).Exec(); err != nil {
+	if err := session.Query(`INSERT INTO scannable_table (testfullname) values (?)`, nil).Bind(m).Exec(); err != nil {
 		t.Fatal("insert:", err)
 	}
 
 	t.Run("get", func(t *testing.T) {
 		var v FullName
-		if err := gocqlx.Query(session.Query(`SELECT testfullname FROM scannable_table`), nil).Get(&v); err != nil {
+		if err := session.Query(`SELECT testfullname FROM scannable_table`, nil).Get(&v); err != nil {
 			t.Fatal("get failed", err)
 		}
 
@@ -213,7 +215,7 @@ func TestScannable(t *testing.T) {
 
 	t.Run("select", func(t *testing.T) {
 		var v []FullName
-		if err := gocqlx.Query(session.Query(`SELECT testfullname FROM scannable_table`), nil).Select(&v); err != nil {
+		if err := session.Query(`SELECT testfullname FROM scannable_table`, nil).Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -228,7 +230,7 @@ func TestScannable(t *testing.T) {
 
 	t.Run("select ptr", func(t *testing.T) {
 		var v []*FullName
-		if err := gocqlx.Query(session.Query(`SELECT testfullname FROM scannable_table`), nil).Select(&v); err != nil {
+		if err := session.Query(`SELECT testfullname FROM scannable_table`, nil).Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -245,19 +247,19 @@ func TestScannable(t *testing.T) {
 func TestStructOnly(t *testing.T) {
 	session := CreateSession(t)
 	defer session.Close()
-	if err := ExecStmt(session, `CREATE TABLE gocqlx_test.struct_only_table (first_name text, last_name text, PRIMARY KEY (first_name, last_name))`); err != nil {
+	if err := session.ExecStmt(`CREATE TABLE gocqlx_test.struct_only_table (first_name text, last_name text, PRIMARY KEY (first_name, last_name))`); err != nil {
 		t.Fatal("create table:", err)
 	}
 
 	m := FullName{"John", "Doe"}
 
-	if err := session.Query(`INSERT INTO struct_only_table (first_name, last_name) values (?, ?)`, m.FirstName, m.LastName).Exec(); err != nil {
+	if err := session.Query(`INSERT INTO struct_only_table (first_name, last_name) values (?, ?)`, nil).Bind(m.FirstName, m.LastName).Exec(); err != nil {
 		t.Fatal("insert:", err)
 	}
 
 	t.Run("get", func(t *testing.T) {
 		var v FullName
-		if err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_table`)).StructOnly().Get(&v); err != nil {
+		if err := session.Query(`SELECT first_name, last_name FROM struct_only_table`, nil).Iter().StructOnly().Get(&v); err != nil {
 			t.Fatal("get failed", err)
 		}
 
@@ -268,7 +270,7 @@ func TestStructOnly(t *testing.T) {
 
 	t.Run("select", func(t *testing.T) {
 		var v []FullName
-		if err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_table`)).StructOnly().Select(&v); err != nil {
+		if err := session.Query(`SELECT first_name, last_name FROM struct_only_table`, nil).Iter().StructOnly().Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -283,7 +285,7 @@ func TestStructOnly(t *testing.T) {
 
 	t.Run("select ptr", func(t *testing.T) {
 		var v []*FullName
-		if err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_table`)).StructOnly().Select(&v); err != nil {
+		if err := session.Query(`SELECT first_name, last_name FROM struct_only_table`, nil).Iter().StructOnly().Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -298,7 +300,7 @@ func TestStructOnly(t *testing.T) {
 
 	t.Run("get error", func(t *testing.T) {
 		var v FullName
-		err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_table`)).Get(&v)
+		err := session.Query(`SELECT first_name, last_name FROM struct_only_table`, nil).Get(&v)
 		if err == nil || !strings.HasPrefix(err.Error(), "expected 1 column in result") {
 			t.Fatal("get expected validation error got", err)
 		}
@@ -306,7 +308,7 @@ func TestStructOnly(t *testing.T) {
 
 	t.Run("select error", func(t *testing.T) {
 		var v []FullName
-		err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_table`)).Select(&v)
+		err := session.Query(`SELECT first_name, last_name FROM struct_only_table`, nil).Select(&v)
 		if err == nil || !strings.HasPrefix(err.Error(), "expected 1 column in result") {
 			t.Fatal("select expected validation error got", err)
 		}
@@ -316,19 +318,19 @@ func TestStructOnly(t *testing.T) {
 func TestStructOnlyUDT(t *testing.T) {
 	session := CreateSession(t)
 	defer session.Close()
-	if err := ExecStmt(session, `CREATE TABLE gocqlx_test.struct_only_udt_table (first_name text, last_name text, PRIMARY KEY (first_name, last_name))`); err != nil {
+	if err := session.ExecStmt(`CREATE TABLE gocqlx_test.struct_only_udt_table (first_name text, last_name text, PRIMARY KEY (first_name, last_name))`); err != nil {
 		t.Fatal("create table:", err)
 	}
 
 	m := FullNameUDT{"John", "Doe"}
 
-	if err := session.Query(`INSERT INTO struct_only_udt_table (first_name, last_name) values (?, ?)`, m.FirstName, m.LastName).Exec(); err != nil {
+	if err := session.Query(`INSERT INTO struct_only_udt_table (first_name, last_name) values (?, ?)`, nil).Bind(m.FirstName, m.LastName).Exec(); err != nil {
 		t.Fatal("insert:", err)
 	}
 
 	t.Run("get", func(t *testing.T) {
 		var v FullNameUDT
-		if err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`)).StructOnly().Get(&v); err != nil {
+		if err := session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`, nil).Iter().StructOnly().Get(&v); err != nil {
 			t.Fatal("get failed", err)
 		}
 
@@ -339,7 +341,7 @@ func TestStructOnlyUDT(t *testing.T) {
 
 	t.Run("select", func(t *testing.T) {
 		var v []FullNameUDT
-		if err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`)).StructOnly().Select(&v); err != nil {
+		if err := session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`, nil).Iter().StructOnly().Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -354,7 +356,7 @@ func TestStructOnlyUDT(t *testing.T) {
 
 	t.Run("select ptr", func(t *testing.T) {
 		var v []*FullNameUDT
-		if err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`)).StructOnly().Select(&v); err != nil {
+		if err := session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`, nil).Iter().StructOnly().Select(&v); err != nil {
 			t.Fatal("select failed", err)
 		}
 
@@ -369,7 +371,7 @@ func TestStructOnlyUDT(t *testing.T) {
 
 	t.Run("get error", func(t *testing.T) {
 		var v FullNameUDT
-		err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`)).Get(&v)
+		err := session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`, nil).Get(&v)
 		if err == nil || !strings.HasPrefix(err.Error(), "expected 1 column in result") {
 			t.Fatal("get expected validation error got", err)
 		}
@@ -377,7 +379,7 @@ func TestStructOnlyUDT(t *testing.T) {
 
 	t.Run("select error", func(t *testing.T) {
 		var v []FullNameUDT
-		err := gocqlx.Iter(session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`)).Select(&v)
+		err := session.Query(`SELECT first_name, last_name FROM struct_only_udt_table`, nil).Select(&v)
 		if err == nil || !strings.HasPrefix(err.Error(), "expected 1 column in result") {
 			t.Fatal("select expected validation error got", err)
 		}
@@ -387,10 +389,10 @@ func TestStructOnlyUDT(t *testing.T) {
 func TestUnsafe(t *testing.T) {
 	session := CreateSession(t)
 	defer session.Close()
-	if err := ExecStmt(session, `CREATE TABLE gocqlx_test.unsafe_table (testtext text PRIMARY KEY, testtextunbound text)`); err != nil {
+	if err := session.ExecStmt(`CREATE TABLE gocqlx_test.unsafe_table (testtext text PRIMARY KEY, testtextunbound text)`); err != nil {
 		t.Fatal("create table:", err)
 	}
-	if err := session.Query(`INSERT INTO unsafe_table (testtext, testtextunbound) values (?, ?)`, "test", "test").Exec(); err != nil {
+	if err := session.Query(`INSERT INTO unsafe_table (testtext, testtextunbound) values (?, ?)`, nil).Bind("test", "test").Exec(); err != nil {
 		t.Fatal("insert:", err)
 	}
 
@@ -400,16 +402,16 @@ func TestUnsafe(t *testing.T) {
 
 	t.Run("safe get", func(t *testing.T) {
 		var v UnsafeTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM unsafe_table`))
-		if err := i.Get(&v); err == nil || err.Error() != "missing destination name \"testtextunbound\" in *gocqlx_test.UnsafeTable" {
+		err := session.Query(`SELECT * FROM unsafe_table`, nil).Get(&v)
+		if err == nil || err.Error() != "missing destination name \"testtextunbound\" in *gocqlx_test.UnsafeTable" {
 			t.Fatal("expected ErrNotFound", "got", err)
 		}
 	})
 
 	t.Run("safe select", func(t *testing.T) {
 		var v []UnsafeTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM unsafe_table`))
-		if err := i.Select(&v); err == nil || err.Error() != "missing destination name \"testtextunbound\" in *gocqlx_test.UnsafeTable" {
+		err := session.Query(`SELECT * FROM unsafe_table`, nil).Select(&v)
+		if err == nil || err.Error() != "missing destination name \"testtextunbound\" in *gocqlx_test.UnsafeTable" {
 			t.Fatal("expected ErrNotFound", "got", err)
 		}
 		if cap(v) > 0 {
@@ -419,8 +421,8 @@ func TestUnsafe(t *testing.T) {
 
 	t.Run("unsafe get", func(t *testing.T) {
 		var v UnsafeTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM unsafe_table`))
-		if err := i.Unsafe().Get(&v); err != nil {
+		err := session.Query(`SELECT * FROM unsafe_table`, nil).Iter().Unsafe().Get(&v)
+		if err != nil {
 			t.Fatal(err)
 		}
 		if v.Testtext != "test" {
@@ -430,8 +432,8 @@ func TestUnsafe(t *testing.T) {
 
 	t.Run("unsafe select", func(t *testing.T) {
 		var v []UnsafeTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM unsafe_table`))
-		if err := i.Unsafe().Select(&v); err != nil {
+		err := session.Query(`SELECT * FROM unsafe_table`, nil).Iter().Unsafe().Select(&v)
+		if err != nil {
 			t.Fatal(err)
 		}
 		if len(v) != 1 {
@@ -444,10 +446,12 @@ func TestUnsafe(t *testing.T) {
 
 	t.Run("DefaultUnsafe select", func(t *testing.T) {
 		gocqlx.DefaultUnsafe = true
-		defer func() { gocqlx.DefaultUnsafe = false }()
+		defer func() {
+			gocqlx.DefaultUnsafe = false
+		}()
 		var v []UnsafeTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM unsafe_table`))
-		if err := i.Select(&v); err != nil {
+		err := session.Query(`SELECT * FROM unsafe_table`, nil).Iter().Select(&v)
+		if err != nil {
 			t.Fatal(err)
 		}
 		if len(v) != 1 {
@@ -462,7 +466,7 @@ func TestUnsafe(t *testing.T) {
 func TestNotFound(t *testing.T) {
 	session := CreateSession(t)
 	defer session.Close()
-	if err := ExecStmt(session, `CREATE TABLE gocqlx_test.not_found_table (testtext text PRIMARY KEY)`); err != nil {
+	if err := session.ExecStmt(`CREATE TABLE gocqlx_test.not_found_table (testtext text PRIMARY KEY)`); err != nil {
 		t.Fatal("create table:", err)
 	}
 
@@ -472,9 +476,7 @@ func TestNotFound(t *testing.T) {
 
 	t.Run("get cql error", func(t *testing.T) {
 		var v NotFoundTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM not_found_table WRONG`).RetryPolicy(nil))
-
-		err := i.Get(&v)
+		err := session.Query(`SELECT * FROM not_found_table WRONG`, nil).RetryPolicy(nil).Get(&v)
 		if err == nil || !strings.Contains(err.Error(), "WRONG") {
 			t.Fatal(err)
 		}
@@ -482,17 +484,15 @@ func TestNotFound(t *testing.T) {
 
 	t.Run("get", func(t *testing.T) {
 		var v NotFoundTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM not_found_table`))
-		if err := i.Get(&v); err != gocql.ErrNotFound {
+		err := session.Query(`SELECT * FROM not_found_table`, nil).Get(&v)
+		if err != gocql.ErrNotFound {
 			t.Fatal("expected ErrNotFound", "got", err)
 		}
 	})
 
 	t.Run("select cql error", func(t *testing.T) {
 		var v []NotFoundTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM not_found_table WRONG`).RetryPolicy(nil))
-
-		err := i.Select(&v)
+		err := session.Query(`SELECT * FROM not_found_table WRONG`, nil).RetryPolicy(nil).Select(&v)
 		if err == nil || !strings.Contains(err.Error(), "WRONG") {
 			t.Fatal(err)
 		}
@@ -500,8 +500,8 @@ func TestNotFound(t *testing.T) {
 
 	t.Run("select", func(t *testing.T) {
 		var v []NotFoundTable
-		i := gocqlx.Iter(session.Query(`SELECT * FROM not_found_table`))
-		if err := i.Select(&v); err != nil {
+		err := session.Query(`SELECT * FROM not_found_table`, nil).Select(&v)
+		if err != nil {
 			t.Fatal(err)
 		}
 		if cap(v) > 0 {
@@ -513,14 +513,14 @@ func TestNotFound(t *testing.T) {
 func TestPaging(t *testing.T) {
 	session := CreateSession(t)
 	defer session.Close()
-	if err := ExecStmt(session, `CREATE TABLE gocqlx_test.paging_table (id int PRIMARY KEY, val int)`); err != nil {
+	if err := session.ExecStmt(`CREATE TABLE gocqlx_test.paging_table (id int PRIMARY KEY, val int)`); err != nil {
 		t.Fatal("create table:", err)
 	}
-	if err := ExecStmt(session, `CREATE INDEX id_val_index ON gocqlx_test.paging_table (val)`); err != nil {
+	if err := session.ExecStmt(`CREATE INDEX id_val_index ON gocqlx_test.paging_table (val)`); err != nil {
 		t.Fatal("create index:", err)
 	}
-	stmt, names := qb.Insert("gocqlx_test.paging_table").Columns("id", "val").ToCql()
-	q := gocqlx.Query(session.Query(stmt), names)
+
+	q := session.Query(qb.Insert("gocqlx_test.paging_table").Columns("id", "val").ToCql())
 	for i := 0; i < 5000; i++ {
 		if err := q.Bind(i, i).Exec(); err != nil {
 			t.Fatal(err)
@@ -537,12 +537,13 @@ func TestPaging(t *testing.T) {
 			Where(qb.Lt("val")).
 			AllowFiltering().
 			Columns("id", "val").ToCql()
-		it := gocqlx.Query(session.Query(stmt, 100).PageSize(10), names).Iter()
-		defer it.Close()
+		iter := session.Query(stmt, names).Bind(100).PageSize(10).Iter()
+		defer iter.Close()
+
 		var cnt int
 		for {
 			p := &Paging{}
-			if !it.StructScan(p) {
+			if !iter.StructScan(p) {
 				break
 			}
 			cnt++
