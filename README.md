@@ -15,85 +15,86 @@ Package `gocqlx` is an idiomatic extension to `gocql` that provides usability fe
 * Database migrations ([package migrate](https://github.com/scylladb/gocqlx/blob/master/migrate))
 * Fast!
 
-## Training and Scylla University
+## Example
+
+Specify table model
+
+```go
+// metadata specifies table name and columns it must be in sync with schema.
+var personMetadata = table.Metadata{
+	Name:    "person",
+	Columns: []string{"first_name", "last_name", "email"},
+	PartKey: []string{"first_name"},
+	SortKey: []string{"last_name"},
+}
+
+// personTable allows for simple CRUD operations based on personMetadata.
+var personTable = table.New(personMetadata)
+
+// Person represents a row in person table.
+// Field names are converted to camel case by default, no need to add special tags.
+// If you want to disable a field add `db:"-"` tag, it will not be persisted.
+type Person struct {
+	FirstName string
+	LastName  string
+	Email     []string
+}
+```
+
+Insert, bind data from struct
+
+```go
+p := Person{
+	"Patricia",
+	"Citizen",
+	[]string{"patricia.citzen@gocqlx_test.com"},
+}
+q := session.Query(personTable.Insert()).BindStruct(p)
+if err := q.ExecRelease(); err != nil {
+	t.Fatal(err)
+}
+```
+
+Get by primary key
+
+```go
+p := Person{
+	"Patricia",
+	"Citizen",
+	nil, // no email
+}
+q := session.Query(personTable.Get()).BindStruct(p)
+if err := q.GetRelease(&p); err != nil {
+	t.Fatal(err)
+}
+t.Log(p)
+// stdout: {Patricia Citizen [patricia.citzen@gocqlx_test.com]}
+```
+
+Load all rows in a partition to a slice
+
+```go
+var people []Person
+q := session.Query(personTable.Select()).BindMap(qb.M{"first_name": "Patricia"})
+if err := q.SelectRelease(&people); err != nil {
+	t.Fatal(err)
+}
+t.Log(people)
+// stdout: [{Patricia Citizen [patricia.citzen@gocqlx_test.com]}]
+```
+
+See more examples in:
+* [example_test.go](https://github.com/scylladb/gocqlx/blob/master/example_test.go)
+* [table/example_test.go](https://github.com/scylladb/gocqlx/blob/master/table/example_test.go)
+* [package qb]((https://github.com/scylladb/gocqlx/blob/master/qb)) tests
+
+### Scylla University
 
 [Scylla University](https://university.scylladb.com/) includes training material and online courses which will help you become a Scylla NoSQL database expert.
 The course [Using Scylla Drivers](https://university.scylladb.com/courses/using-scylla-drivers/) explains how to use drivers in different languages to interact with a Scylla cluster.
 The lesson, [Golang and Scylla Part 3](https://university.scylladb.com/courses/using-scylla-drivers/lessons/golang-and-scylla-part-3-gocqlx/) includes a sample application that uses the GoCQXL package.
 It connects to a Scylla cluster, displays the contents of a  table, inserts and deletes data, and shows the contents of the table after each action.
 Courses in [Scylla University](https://university.scylladb.com/) cover a variety of topics dealing with Scylla data modeling, administration, architecture and also covering some basic NoSQL concepts.
-
-## Example
-
-```go
-// Person represents a row in person table.
-// Field names are converted to camel case by default, no need to add special tags.
-// If you want to disable a field add `db:"-"` tag, it will not be persisted.
-type Person struct {
-    FirstName string
-    LastName  string
-    Email     []string
-}
-
-// Insert, bind data from struct.
-{
-    stmt, names := qb.Insert("gocqlx_test.person").Columns("first_name", "last_name", "email").ToCql()
-    q := gocqlx.Query(session.Query(stmt), names).BindStruct(p)
-
-    if err := q.ExecRelease(); err != nil {
-        t.Fatal(err)
-    }
-}
-// Get first result into a struct.
-{
-    var p Person
-    stmt, names := qb.Select("gocqlx_test.person").Where(qb.Eq("first_name")).ToCql()
-    q := gocqlx.Query(session.Query(stmt), names).BindMap(qb.M{
-        "first_name": "Patricia",
-    })
-    if err := q.GetRelease(&p); err != nil {
-        t.Fatal(err)
-    }
-}
-// Load all the results into a slice.
-{
-    var people []Person
-    stmt, names := qb.Select("gocqlx_test.person").Where(qb.In("first_name")).ToCql()
-    q := gocqlx.Query(session.Query(stmt), names).BindMap(qb.M{
-        "first_name": []string{"Patricia", "Igy", "Ian"},
-    })
-    if err := q.SelectRelease(&people); err != nil {
-        t.Fatal(err)
-    }
-}
-
-// metadata specifies table name and columns it must be in sync with schema.
-var personMetadata = table.Metadata{
-    Name:    "person",
-    Columns: []string{"first_name", "last_name", "email"},
-    PartKey: []string{"first_name"},
-    SortKey: []string{"last_name"},
-}
-
-// personTable allows for simple CRUD operations based on personMetadata.
-var personTable = table.New(personMetadata)
-
-// Get by primary key.
-{
-    p := Person{
-        "Patricia",
-        "Citizen",
-        nil, // no email
-    }
-    stmt, names := personTable.Get() // you can filter columns too
-    q := gocqlx.Query(session.Query(stmt), names).BindStruct(p)
-    if err := q.GetRelease(&p); err != nil {
-        t.Fatal(err)
-    }
-}
-```
-
-See more examples in [example_test.go](https://github.com/scylladb/gocqlx/blob/master/example_test.go) and [table/example_test.go](https://github.com/scylladb/gocqlx/blob/master/table/example_test.go).
 
 ## Performance
 
